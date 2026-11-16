@@ -342,26 +342,23 @@
 <script>
 // GitHub Pages: google.script.run -> Apps Script web app (fetch)
 const EXEC_URL = 'https://script.google.com/macros/s/AKfycbx7iRq3-im9Of0AT4NDzhkSi5JfcFbBXOrwk6AdNVNBUR3xGEEkBgQNqO_rjf9Aua0/exec';
-window.google = {script: {run: new Proxy({}, {get() {
-  let ok = () => {}, er = () => {};
-  const o = {
-    withSuccessHandler(f) { ok = f; return o; },
-    withFailureHandler(f) { er = f; return o; }
-  };
-  return new Proxy(o, {get(t, fn) {
-    if (fn in t) return t[fn];
+function makeRunner(ok, er) {
+  return new Proxy({}, {get(_, name) {
+    if (name === 'withSuccessHandler') return f => makeRunner(f, er);
+    if (name === 'withFailureHandler') return f => makeRunner(ok, f);
     return (...args) => {
       fetch(EXEC_URL, {
         method: 'POST',
         headers: {'Content-Type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({fn: fn, args: args})
+        body: JSON.stringify({fn: name, args: args})
       })
       .then(r => r.json())
       .then(j => { if (j && j.error) throw new Error(j.error); ok(j ? j.result : null); })
       .catch(e => er(e));
     };
   }});
-}})}};
+}
+window.google = {script: {run: makeRunner(() => {}, () => {})}};
 </script>
 <script>
 window.onerror = function (msg, src, line) {
